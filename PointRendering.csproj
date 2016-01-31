@@ -81,6 +81,9 @@
     <None Include="bunny.off">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+    <None Include="happy.off">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="heart.off">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

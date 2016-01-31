@@ -37,26 +37,34 @@ namespace PointRendering
 
             //  Clear the color and depth buffer.
             gl.Clear(OpenGL.GL_COLOR_BUFFER_BIT | OpenGL.GL_DEPTH_BUFFER_BIT);
-
+            
+            gl.ClearColor(0.15f, 0.15f, 0.15f, 1.0f);
             //  Load the identity matrix.
             gl.LoadIdentity();
 
             //  Rotate around the Y axis.
-            
-            gl.Translate(0.0f, 0.0f, -1.0f);
+            gl.PushMatrix();
+            gl.Translate(0.0f, 0.0f, -1.25f);
             gl.Rotate(rotation, 0.0f, 1.0f, 0.0f);
-            gl.Scale(0.08, 0.08, 0.08);
+            gl.Scale(1.0f / scale, 1.0f / scale, 1.0f / scale);
             gl.Translate(-center[0], -center[1], -center[2]);
-            gl.EnableClientState(OpenGL.GL_VERTEX_ARRAY);
-            if (v_vertex != null) 
-            {
-                IntPtr ptr1 = GCHandle.Alloc(v_vertex, GCHandleType.Pinned).AddrOfPinnedObject();
-                gl.VertexPointer(3, OpenGL.GL_FLOAT, 0, ptr1);
-                int size = v_vertex.Length / 3;
-                gl.DrawArrays(OpenGL.GL_POINTS, 0, size);
-            }
-            gl.DisableClientState(OpenGL.GL_VERTEX_ARRAY);
 
+            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, VBOId[0]);
+            gl.EnableClientState(OpenGL.GL_VERTEX_ARRAY);
+            gl.VertexPointer(3, OpenGL.GL_FLOAT, 0, BUFFER_OFFSET_ZERO);
+
+            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, VBOId[1]);
+            gl.EnableClientState(OpenGL.GL_COLOR_ARRAY);
+            gl.ColorPointer(3, OpenGL.GL_FLOAT, 0, BUFFER_OFFSET_ZERO);
+            
+            gl.DrawArrays(OpenGL.GL_POINTS, 0, n_vertex);
+
+            gl.DisableClientState(OpenGL.GL_VERTEX_ARRAY);
+            gl.DisableClientState(OpenGL.GL_NORMAL_ARRAY);
+
+            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, 0);
+            gl.PopMatrix();
+            
             //  Nudge the rotation.
             rotation += 10.0f;
         }
@@ -69,10 +77,15 @@ namespace PointRendering
         {
             System.IO.StreamReader file = new System.IO.StreamReader(fileName);
             string line = file.ReadLine();
+            float[] maxV = new float[3];
+            maxV[0] = maxV[1] = maxV[2] = float.MinValue;
+            float[] minV = new float[3];
+            minV[0] = minV[1] = minV[2] = float.MaxValue;
+
             if(line != null)
             {
                 //Debug.WriteLine(line);
-                if (line.CompareTo("COFF") == 0) 
+                if (line.CompareTo("OFF") == 0) 
                 {
                     line = file.ReadLine();
                     if (line != null)
@@ -81,11 +94,9 @@ namespace PointRendering
                         int nvertex = Convert.ToInt32(words[0]);
                         int npolygons = Convert.ToInt32(words[1]);
                         v_vertex = new float[nvertex * 3];
+                        v_color = new float[nvertex * 3];
                         int index = 0;
-                        float[] maxV = new float[3];
-                        maxV[0] = maxV[1] = maxV[2] = float.MinValue;
-                        float[] minV = new float[3];
-                        minV[0] = minV[1] = minV[2] = float.MaxValue;
+                       
                         for (int k = 0; k < nvertex; k++, index += 3)
                         {
                             line = file.ReadLine();
@@ -93,6 +104,7 @@ namespace PointRendering
                             v_vertex[index + 0] = (float)Convert.ToDouble(values[0]);
                             v_vertex[index + 1] = (float)Convert.ToDouble(values[1]);
                             v_vertex[index + 2] = (float)Convert.ToDouble(values[2]);
+
                             if (v_vertex[index + 0] > maxV[0])
                                 maxV[0] = v_vertex[index + 0];
                             if (v_vertex[index + 0] < minV[0])
@@ -111,11 +123,24 @@ namespace PointRendering
                         center[0] = (maxV[0] + minV[0]) / 2.0f;
                         center[1] = (maxV[1] + minV[1]) / 2.0f;
                         center[2] = (maxV[2] + minV[2]) / 2.0f;
-                        scale = Math.Max(Math.Max(maxV[0] - minV[0], maxV[1] - minV[1]), maxV[2] - minV[2]);
+                        scale = Math.Max(Math.Max(Math.Abs(maxV[0] - minV[0]), Math.Abs(maxV[1] - minV[1])), Math.Abs(maxV[2] - minV[2]));
                     }
                 }
             }
             file.Close();
+            //just to assign some colors, min = red, max = blue
+            float t;
+            float[] red = new float[3];
+            red[0] = 0.9f; red[1] = 0.1f; red[2] = 0.1f;
+            float[] blue = new float[3];
+            blue[0] = 0.9f; blue[1] = 0.9f;  blue[2] = 0.1f;
+            for (int k = 0; k < v_color.Length; k += 3) 
+            {
+                t = (v_vertex[k + 1] - minV[1]) / (maxV[1] - minV[1]);
+                v_color[k + 0] = (1.0f - t) * blue[0] + t * red[0];
+                v_color[k + 1] = (1.0f - t) * blue[1] + t * red[1];
+                v_color[k + 2] = (1.0f - t) * blue[2] + t * red[2];
+            }
         }
 
         /// <summary>
@@ -130,12 +155,28 @@ namespace PointRendering
             //  Get the OpenGL object.
             OpenGL gl = openGLControl.OpenGL;
 
-            //  Set the clear color.
-            gl.ClearColor(0, 0, 0, 0);
+            //  Set the point size
+            gl.PointSize(1);
 
             //load a file
-            loadFile("heart.off");
-            
+            //loadFile("heart.off");
+            loadFile("happy.off");
+
+            n_vertex = v_vertex.Length / 3;
+
+            //initialize buffers
+            VBOId = new uint[2];
+            gl.GenBuffers(2, VBOId);
+            //vertex buffer
+            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, VBOId[0]);
+            IntPtr ptr1 = GCHandle.Alloc(v_vertex, GCHandleType.Pinned).AddrOfPinnedObject();
+            gl.BufferData(OpenGL.GL_ARRAY_BUFFER, sizeof(float) * v_vertex.Length, ptr1, OpenGL.GL_STATIC_DRAW);
+            //color buffer
+            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, VBOId[1]);
+            IntPtr ptr2 = GCHandle.Alloc(v_color, GCHandleType.Pinned).AddrOfPinnedObject();
+            gl.BufferData(OpenGL.GL_ARRAY_BUFFER, sizeof(float) * v_color.Length, ptr2, OpenGL.GL_DYNAMIC_DRAW);
+
+            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, 0);
         }
 
         /// <summary>
@@ -160,10 +201,17 @@ namespace PointRendering
             gl.Perspective(60.0f, (double)Width / (double)Height, 0.01, 100.0);
 
             //  Use the 'look at' helper function to position and aim the camera.
-            gl.LookAt(-5, 5, -5, 0, 0, 0, 0, 1, 0);
+            //gl.LookAt(-5, 5, -5, 0, 0, 0, 0, 1, 0);
 
             //  Set the modelview matrix.
             gl.MatrixMode(OpenGL.GL_MODELVIEW);
+        }
+
+        private void SharpGLForm_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            //  Get the OpenGL object.
+            OpenGL gl = openGLControl.OpenGL;
+            gl.DeleteBuffers(2, VBOId);
         }
 
         /// <summary>
@@ -171,7 +219,11 @@ namespace PointRendering
         /// </summary>
         private float rotation = 0.0f;
         private float [] v_vertex;
+        private float[] v_color;
         private float [] center = new float[3];
         private float scale;
+        private uint [] VBOId;
+        private IntPtr BUFFER_OFFSET_ZERO = GCHandle.Alloc(null, GCHandleType.Pinned).AddrOfPinnedObject();
+        private int n_vertex;
     }
 }
