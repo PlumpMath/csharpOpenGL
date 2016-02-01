@@ -38,14 +38,16 @@ namespace PointRendering
             //  Clear the color and depth buffer.
             gl.Clear(OpenGL.GL_COLOR_BUFFER_BIT | OpenGL.GL_DEPTH_BUFFER_BIT);
             
-            gl.ClearColor(0.15f, 0.15f, 0.15f, 1.0f);
+            //gl.ClearColor(0.15f, 0.15f, 0.15f, 1.0f);
+            gl.ClearColor(0.05f, 0.05f, 0.05f, 1.0f);
             //  Load the identity matrix.
             gl.LoadIdentity();
 
+            gl.LookAt(x, y, z, x + lx, 0.0f, z + lz, 0.0f, 1.0f, 0.0f);
             //  Rotate around the Y axis.
             gl.PushMatrix();
-            gl.Translate(0.0f, 0.0f, -1.25f);
-            gl.Rotate(rotation, 0.0f, 1.0f, 0.0f);
+//            gl.Translate(0.0f, 0.0f, -1.25f);
+//            gl.Rotate(rotation, 0.0f, 1.0f, 0.0f);
             gl.Scale(1.0f / scale, 1.0f / scale, 1.0f / scale);
             gl.Translate(-center[0], -center[1], -center[2]);
 
@@ -131,9 +133,9 @@ namespace PointRendering
             //just to assign some colors, min = red, max = blue
             float t;
             float[] red = new float[3];
-            red[0] = 0.9f; red[1] = 0.1f; red[2] = 0.1f;
+            red[0] = 0.6f; red[1] = 0.4f; red[2] = 0.25f;
             float[] blue = new float[3];
-            blue[0] = 0.9f; blue[1] = 0.9f;  blue[2] = 0.1f;
+            blue[0] = 0.05f; blue[1] = 0.1f;  blue[2] = 0.9f;
             for (int k = 0; k < v_color.Length; k += 3) 
             {
                 t = (v_vertex[k + 1] - minV[1]) / (maxV[1] - minV[1]);
@@ -155,12 +157,15 @@ namespace PointRendering
             //  Get the OpenGL object.
             OpenGL gl = openGLControl.OpenGL;
 
+            //gl.Enable(OpenGL.GL_POINT_SMOOTH);
+
             //  Set the point size
             gl.PointSize(1);
 
             //load a file
             //loadFile("heart.off");
-            loadFile("happy.off");
+            //loadFile("happy.off");
+            loadFile("mountains.off");
 
             n_vertex = v_vertex.Length / 3;
 
@@ -225,5 +230,60 @@ namespace PointRendering
         private uint [] VBOId;
         private IntPtr BUFFER_OFFSET_ZERO = GCHandle.Alloc(null, GCHandleType.Pinned).AddrOfPinnedObject();
         private int n_vertex;
+        //mouse
+        float angle;
+        float lx = 0.0f, lz = -1.0f;
+        float x = 0.0f, y = 0.0f, z = +1.0f;
+        float fraction = 0.02f;
+
+        private void SharpGLForm_MouseDown(object sender, MouseEventArgs e)
+        {
+
+        }
+
+        private void SharpGLForm_MouseMove(object sender, MouseEventArgs e)
+        {
+
+        }
+
+        private void SharpGLForm_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            
+        }
+
+        private void openGLControl_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.W)
+            {
+                x += lx * fraction;
+                z += lz * fraction;
+            }
+            else if (e.KeyCode == Keys.S)
+            {
+                x -= lx * fraction;
+                z -= lz * fraction;
+            }
+            if (e.KeyCode == Keys.A)
+            {
+                angle -= 0.01f;
+                lx = (float)Math.Sin(angle);
+                lz = (float)-Math.Cos(angle);
+            }
+            else if (e.KeyCode == Keys.D)
+            {
+                angle += 0.01f;
+                lx = (float)Math.Sin(angle);
+                lz = (float)-Math.Cos(angle);
+            }
+            else if (e.KeyCode == Keys.Q) 
+            {
+                y += fraction;
+            }
+            else if (e.KeyCode == Keys.E)
+            {
+                y -= fraction;
+            }
+            Invalidate();
+        }
     }
 }

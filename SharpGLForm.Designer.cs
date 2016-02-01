@@ -46,6 +46,7 @@
             this.openGLControl.OpenGLInitialized += new System.EventHandler(this.openGLControl_OpenGLInitialized);
             this.openGLControl.OpenGLDraw += new SharpGL.RenderEventHandler(this.openGLControl_OpenGLDraw);
             this.openGLControl.Resized += new System.EventHandler(this.openGLControl_Resized);
+            this.openGLControl.KeyDown += new System.Windows.Forms.KeyEventHandler(this.openGLControl_KeyDown);
             // 
             // SharpGLForm
             // 
@@ -56,6 +57,9 @@
             this.Name = "SharpGLForm";
             this.Text = "SharpGL Form";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.SharpGLForm_FormClosing);
+            this.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.SharpGLForm_KeyPress);
+            this.MouseDown += new System.Windows.Forms.MouseEventHandler(this.SharpGLForm_MouseDown);
+            this.MouseMove += new System.Windows.Forms.MouseEventHandler(this.SharpGLForm_MouseMove);
             ((System.ComponentModel.ISupportInitialize)(this.openGLControl)).EndInit();
             this.ResumeLayout(false);
 
