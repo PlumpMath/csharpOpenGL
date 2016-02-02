@@ -10,6 +10,7 @@ using SharpGL;
 using System.IO;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using System.Collections;
 namespace PointRendering
 {
     /// <summary>
@@ -23,6 +24,34 @@ namespace PointRendering
         public SharpGLForm()
         {
             InitializeComponent();
+        }
+
+        private void drawModel(OpenGL gl) 
+        {
+            if(l_vboId != null)
+            {
+                gl.EnableClientState(OpenGL.GL_VERTEX_ARRAY);
+                gl.EnableClientState(OpenGL.GL_COLOR_ARRAY);
+                for(int k = 0; k < l_vboId.Count; k++)
+                {
+                    gl.PushMatrix();
+                        //transformations
+                        gl.Scale(1.0f / f_scale, 1.0f / f_scale, 1.0f / f_scale);
+                        gl.Translate(-v_center.X, -v_center.Y, -v_center.Z);
+                        //vertexes
+                        gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, l_vboId[k][0]);
+                        gl.VertexPointer(3, OpenGL.GL_FLOAT, 0, BUFFER_OFFSET_ZERO);
+                        //color
+                        gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, l_vboId[k][1]);
+                        gl.ColorPointer(3, OpenGL.GL_FLOAT, 0, BUFFER_OFFSET_ZERO);
+                        //draw l_sizes[k] points
+                        gl.DrawArrays(OpenGL.GL_POINTS, 0, l_sizes[k]);
+                    gl.PopMatrix();
+                }
+                gl.DisableClientState(OpenGL.GL_VERTEX_ARRAY);
+                gl.DisableClientState(OpenGL.GL_COLOR_ARRAY);
+                gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, 0);
+            }
         }
 
         /// <summary>
@@ -42,107 +71,112 @@ namespace PointRendering
             gl.ClearColor(0.05f, 0.05f, 0.05f, 1.0f);
             //  Load the identity matrix.
             gl.LoadIdentity();
-
+            // using a camera to move into the scene
             gl.LookAt(x, y, z, x + lx, 0.0f, z + lz, 0.0f, 1.0f, 0.0f);
-            //  Rotate around the Y axis.
+            //drawing the model
+            gl.Rotate(-90, 1, 0, 0);
             gl.PushMatrix();
-//            gl.Translate(0.0f, 0.0f, -1.25f);
-//            gl.Rotate(rotation, 0.0f, 1.0f, 0.0f);
-            gl.Scale(1.0f / scale, 1.0f / scale, 1.0f / scale);
-            gl.Translate(-center[0], -center[1], -center[2]);
-
-            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, VBOId[0]);
-            gl.EnableClientState(OpenGL.GL_VERTEX_ARRAY);
-            gl.VertexPointer(3, OpenGL.GL_FLOAT, 0, BUFFER_OFFSET_ZERO);
-
-            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, VBOId[1]);
-            gl.EnableClientState(OpenGL.GL_COLOR_ARRAY);
-            gl.ColorPointer(3, OpenGL.GL_FLOAT, 0, BUFFER_OFFSET_ZERO);
-            
-            gl.DrawArrays(OpenGL.GL_POINTS, 0, n_vertex);
-
-            gl.DisableClientState(OpenGL.GL_VERTEX_ARRAY);
-            gl.DisableClientState(OpenGL.GL_NORMAL_ARRAY);
-
-            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, 0);
+                drawModel(gl);
             gl.PopMatrix();
-            
-            //  Nudge the rotation.
-            rotation += 10.0f;
         }
 
         /// <summary>
         /// Open a File to be loaded
         /// </summary>
         /// /// <param name="fileName">The name of the file to open.</param>
-        private void loadFile(string fileName) 
+        private void loadFile(string fileName)
         {
             System.IO.StreamReader file = new System.IO.StreamReader(fileName);
-            string line = file.ReadLine();
-            float[] maxV = new float[3];
-            maxV[0] = maxV[1] = maxV[2] = float.MinValue;
-            float[] minV = new float[3];
-            minV[0] = minV[1] = minV[2] = float.MaxValue;
-
-            if(line != null)
+            string line;
+            if (l_vertex == null)
+                l_vertex = new List<SharpGL.SceneGraph.Vertex>();
+            if (l_color == null)
+                l_color = new List<SharpGL.SceneGraph.Vertex>();
+            while ((line = file.ReadLine()) != null) 
             {
-                //Debug.WriteLine(line);
-                if (line.CompareTo("OFF") == 0) 
-                {
-                    line = file.ReadLine();
-                    if (line != null)
-                    {
-                        string[] words = line.Split(' ');
-                        int nvertex = Convert.ToInt32(words[0]);
-                        int npolygons = Convert.ToInt32(words[1]);
-                        v_vertex = new float[nvertex * 3];
-                        v_color = new float[nvertex * 3];
-                        int index = 0;
-                       
-                        for (int k = 0; k < nvertex; k++, index += 3)
-                        {
-                            line = file.ReadLine();
-                            string[] values = line.Split(' ');
-                            v_vertex[index + 0] = (float)Convert.ToDouble(values[0]);
-                            v_vertex[index + 1] = (float)Convert.ToDouble(values[1]);
-                            v_vertex[index + 2] = (float)Convert.ToDouble(values[2]);
-
-                            if (v_vertex[index + 0] > maxV[0])
-                                maxV[0] = v_vertex[index + 0];
-                            if (v_vertex[index + 0] < minV[0])
-                                minV[0] = v_vertex[index + 0];
-
-                            if (v_vertex[index + 1] > maxV[1])
-                                maxV[1] = v_vertex[index + 1];
-                            if (v_vertex[index + 1] < minV[1])
-                                minV[1] = v_vertex[index + 1];
-
-                            if (v_vertex[index + 2] > maxV[2])
-                                maxV[2] = v_vertex[index + 2];
-                            if (v_vertex[index + 2] < minV[2])
-                                minV[2] = v_vertex[index + 2];
-                        }
-                        center[0] = (maxV[0] + minV[0]) / 2.0f;
-                        center[1] = (maxV[1] + minV[1]) / 2.0f;
-                        center[2] = (maxV[2] + minV[2]) / 2.0f;
-                        scale = Math.Max(Math.Max(Math.Abs(maxV[0] - minV[0]), Math.Abs(maxV[1] - minV[1])), Math.Abs(maxV[2] - minV[2]));
-                    }
-                }
+                string[] words = line.Split(',');
+                SharpGL.SceneGraph.Vertex vertex = new SharpGL.SceneGraph.Vertex();
+                SharpGL.SceneGraph.Vertex color = new SharpGL.SceneGraph.Vertex();
+                vertex.Set( float.Parse(words[0], System.Globalization.CultureInfo.InvariantCulture),
+                            float.Parse(words[1], System.Globalization.CultureInfo.InvariantCulture),
+                            float.Parse(words[2], System.Globalization.CultureInfo.InvariantCulture));
+                l_vertex.Add(vertex);
+                if (vertex.X < minVertex.X)
+                    minVertex.X = vertex.X;
+                if (vertex.Y < minVertex.Y)
+                    minVertex.Y = vertex.Y;
+                if (vertex.Z < minVertex.Z)
+                    minVertex.Z = vertex.Z;
+                if (vertex.X > maxVertex.X)
+                    maxVertex.X = vertex.X;
+                if (vertex.Y > maxVertex.Y)
+                    maxVertex.Y = vertex.Y;
+                if (vertex.Z > maxVertex.Z)
+                    maxVertex.Z = vertex.Z;
+                color.Set(  float.Parse(words[4], System.Globalization.CultureInfo.InvariantCulture),
+                            float.Parse(words[5], System.Globalization.CultureInfo.InvariantCulture),
+                            float.Parse(words[6], System.Globalization.CultureInfo.InvariantCulture));
+                color /= 255.0f;
+                l_color.Add(color);
             }
+            v_center = (maxVertex + minVertex) / 2.0f;
+            SharpGL.SceneGraph.Vertex distance = (maxVertex - minVertex);
+            f_scale = Math.Max(Math.Max(distance.X, distance.Y), distance.Z);
             file.Close();
-            //just to assign some colors, min = red, max = blue
-            float t;
-            float[] red = new float[3];
-            red[0] = 0.6f; red[1] = 0.4f; red[2] = 0.25f;
-            float[] blue = new float[3];
-            blue[0] = 0.05f; blue[1] = 0.1f;  blue[2] = 0.9f;
-            for (int k = 0; k < v_color.Length; k += 3) 
+        }
+
+        private void changeColorScale()
+        {
+            SharpGL.SceneGraph.GLColor red = new SharpGL.SceneGraph.GLColor(0.9f, 0.05f, 0.05f, 1);
+            SharpGL.SceneGraph.GLColor green = new SharpGL.SceneGraph.GLColor(0.05f, 0.95f, 0.05f, 1);
+            float diff = maxVertex.Y - minVertex.Y;
+            SharpGL.SceneGraph.Vertex colorTemp = new SharpGL.SceneGraph.Vertex();
+            for (int k = 0; k < l_vertex.Count; k++)
             {
-                t = (v_vertex[k + 1] - minV[1]) / (maxV[1] - minV[1]);
-                v_color[k + 0] = (1.0f - t) * blue[0] + t * red[0];
-                v_color[k + 1] = (1.0f - t) * blue[1] + t * red[1];
-                v_color[k + 2] = (1.0f - t) * blue[2] + t * red[2];
+                float t = (l_vertex[k].Y - minVertex.Y) / diff;
+                colorTemp.Set( (red.R * (1.0f - t)) + (green.R * t),
+                                (red.G * (1.0f - t)) + (green.G * t),
+                                (red.B * (1.0f - t)) + (green.B * t));
+                l_color[k] = colorTemp;
             }
+        }
+
+        public void openInputDataDialog() 
+        {
+            //load a file
+            OpenFileDialog ofd = new OpenFileDialog();
+            ofd.Filter = "Text Files (.txt)|*.txt";
+            DialogResult userClickedOK = ofd.ShowDialog(openGLControl);
+            if (userClickedOK == System.Windows.Forms.DialogResult.OK)
+            {
+                //check if application has elements loaded
+                if (l_vboId.Count > 0)
+                    reset();
+                //from selected file
+                loadFile(ofd.FileName);
+                //to create a gradient color - comment to get original colors from file
+                changeColorScale();
+                //create the GPU buffers
+                createInitialBuffers();
+            }
+        }
+
+        private void testFunctiontoAddCopy() 
+        {
+            //to debug/test
+            Random r = new Random();
+            List<SharpGL.SceneGraph.Vertex> newVertex = new List<SharpGL.SceneGraph.Vertex>(l_vertex);
+            List<SharpGL.SceneGraph.Vertex> newColor = new List<SharpGL.SceneGraph.Vertex>(l_color);
+            for (int k = 0; k < newVertex.Count; k++)
+            {
+                //element = new SharpGL.SceneGraph.Vertex(element.X, element.Y + 20, element.Z);
+                newVertex[k] = new SharpGL.SceneGraph.Vertex(newVertex[k].X + (float)(r.NextDouble() * 50.0), newVertex[k].Y + (float)(r.NextDouble() * 50.0), newVertex[k].Z);
+                //newVertex[k] = new SharpGL.SceneGraph.Vertex(newVertex[k].X, -44722.71f, ewVertex[k].Z);
+                newColor[k] = new SharpGL.SceneGraph.Vertex(1, 1, 1);
+            }
+            addPointsAndColor(newVertex, newColor);
+            newVertex.Clear();
+            newColor.Clear();
         }
 
         /// <summary>
@@ -152,35 +186,76 @@ namespace PointRendering
         /// <param name="e">The <see cref="System.EventArgs"/> instance containing the event data.</param>
         private void openGLControl_OpenGLInitialized(object sender, EventArgs e)
         {
-            //  TODO: Initialise OpenGL here.
-
             //  Get the OpenGL object.
             OpenGL gl = openGLControl.OpenGL;
-
+            
+            //to change smoothness of points
             //gl.Enable(OpenGL.GL_POINT_SMOOTH);
 
             //  Set the point size
             gl.PointSize(1);
 
-            //load a file
-            //loadFile("heart.off");
-            //loadFile("happy.off");
-            loadFile("mountains.off");
+            openInputDataDialog();
+        }
 
-            n_vertex = v_vertex.Length / 3;
+        private void addPointsAndColor(List<SharpGL.SceneGraph.Vertex> lvertex, List<SharpGL.SceneGraph.Vertex> lcolor)
+        {
+            OpenGL gl = openGLControl.OpenGL;
+            //append new points to the existing list (if exists)
+            if (l_vertex == null)
+                l_vertex = new List<SharpGL.SceneGraph.Vertex>();
+            l_vertex.AddRange(lvertex);
+            //append new colors to the existing list (if exists)
+            if(l_color == null)
+                l_color = new List<SharpGL.SceneGraph.Vertex>();
+            l_color.AddRange(lcolor);
+            //set new size of the new list (just to render, if it exists)
+            if (l_sizes == null)
+                l_sizes = new List<int>();
+            l_sizes.Add(lvertex.Count);
 
-            //initialize buffers
-            VBOId = new uint[2];
-            gl.GenBuffers(2, VBOId);
+            uint[] ids = new uint[2];
+            int pos = l_vboId.Count;
+            //add ids to the existing list
+            if (l_vboId == null)
+                l_vboId = new List<uint[]>();
+            l_vboId.Add(ids);
+
+            gl.GenBuffers(2, l_vboId[pos]);
+            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, l_vboId[pos][0]);
+            IntPtr ptr1 = GCHandle.Alloc(lvertex.ToArray().ToArray(), GCHandleType.Pinned).AddrOfPinnedObject();
+            gl.BufferData(OpenGL.GL_ARRAY_BUFFER, sizeof(float) * lvertex.Count * 3, ptr1, OpenGL.GL_STATIC_DRAW);
+            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, l_vboId[pos][1]);
+            IntPtr ptr2 = GCHandle.Alloc(lcolor.ToArray().ToArray(), GCHandleType.Pinned).AddrOfPinnedObject();
+            gl.BufferData(OpenGL.GL_ARRAY_BUFFER, sizeof(float) * lcolor.Count * 3, ptr2, OpenGL.GL_DYNAMIC_DRAW);
+            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, 0);
+        }
+
+        /// <summary>
+        /// Creation of vertex and color buffer from a List<Vertex>. This function reset all values once a new file is loaded
+        /// </summary>
+        private void createInitialBuffers() 
+        {
+            //  Get the OpenGL object.
+            OpenGL gl = openGLControl.OpenGL;
+            //create 
+            if (l_sizes == null)
+                l_sizes = new List<int>();  //create list to store points of each buffer's list
+            l_sizes.Add(l_vertex.Count);
+
+            uint [] ids = new uint[2];
+            l_vboId.Add(ids);
+            //create buffers
+            gl.GenBuffers(2, l_vboId[0]);
             //vertex buffer
-            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, VBOId[0]);
-            IntPtr ptr1 = GCHandle.Alloc(v_vertex, GCHandleType.Pinned).AddrOfPinnedObject();
-            gl.BufferData(OpenGL.GL_ARRAY_BUFFER, sizeof(float) * v_vertex.Length, ptr1, OpenGL.GL_STATIC_DRAW);
+            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, l_vboId[0][0]);
+            IntPtr ptr1 = GCHandle.Alloc(l_vertex.ToArray().ToArray(), GCHandleType.Pinned).AddrOfPinnedObject();
+            gl.BufferData(OpenGL.GL_ARRAY_BUFFER, sizeof(float) * l_vertex.Count * 3, ptr1, OpenGL.GL_STATIC_DRAW);
             //color buffer
-            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, VBOId[1]);
-            IntPtr ptr2 = GCHandle.Alloc(v_color, GCHandleType.Pinned).AddrOfPinnedObject();
-            gl.BufferData(OpenGL.GL_ARRAY_BUFFER, sizeof(float) * v_color.Length, ptr2, OpenGL.GL_DYNAMIC_DRAW);
-
+            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, l_vboId[0][1]);
+            IntPtr ptr2 = GCHandle.Alloc(l_color.ToArray().ToArray(), GCHandleType.Pinned).AddrOfPinnedObject();
+            gl.BufferData(OpenGL.GL_ARRAY_BUFFER, sizeof(float) * l_color.Count * 3, ptr2, OpenGL.GL_DYNAMIC_DRAW);
+            //unbind buffers
             gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, 0);
         }
 
@@ -205,51 +280,60 @@ namespace PointRendering
             //  Create a perspective transformation.
             gl.Perspective(60.0f, (double)Width / (double)Height, 0.01, 100.0);
 
-            //  Use the 'look at' helper function to position and aim the camera.
-            //gl.LookAt(-5, 5, -5, 0, 0, 0, 0, 1, 0);
-
             //  Set the modelview matrix.
             gl.MatrixMode(OpenGL.GL_MODELVIEW);
         }
 
-        private void SharpGLForm_FormClosing(object sender, FormClosingEventArgs e)
+        private void reset()
         {
-            //  Get the OpenGL object.
             OpenGL gl = openGLControl.OpenGL;
-            gl.DeleteBuffers(2, VBOId);
+            //delete ids
+            if (l_vboId != null) 
+            {
+                foreach (var element in l_vboId)
+                    gl.DeleteBuffers(2, element);
+            }
+            l_vboId.Clear();
+            //delete sizes of list of points
+            l_sizes.Clear();
+            //clear list of vertex and color
+            l_color.Clear();
+            l_vertex.Clear();
+            //reset to original values
+            angle = 0.0f;
+            lx = 0.0f; lz = -1.0f;
+            x = 0.0f; y = 0.0f; z = +1.0f;
+            fraction = 0.02f;
+            maxVertex = new SharpGL.SceneGraph.Vertex(float.MinValue, float.MinValue, float.MinValue);
+            minVertex = new SharpGL.SceneGraph.Vertex(float.MaxValue, float.MaxValue, float.MaxValue);
         }
 
         /// <summary>
-        /// The current rotation.
+        /// Invoked when the form is closed
         /// </summary>
-        private float rotation = 0.0f;
-        private float [] v_vertex;
-        private float[] v_color;
-        private float [] center = new float[3];
-        private float scale;
-        private uint [] VBOId;
-        private IntPtr BUFFER_OFFSET_ZERO = GCHandle.Alloc(null, GCHandleType.Pinned).AddrOfPinnedObject();
-        private int n_vertex;
-        //mouse
-        float angle;
-        float lx = 0.0f, lz = -1.0f;
-        float x = 0.0f, y = 0.0f, z = +1.0f;
-        float fraction = 0.02f;
-
-        private void SharpGLForm_MouseDown(object sender, MouseEventArgs e)
+        private void SharpGLForm_FormClosing(object sender, FormClosingEventArgs e)
         {
-
+            reset();
         }
 
-        private void SharpGLForm_MouseMove(object sender, MouseEventArgs e)
-        {
-
-        }
-
-        private void SharpGLForm_KeyPress(object sender, KeyPressEventArgs e)
-        {
-            
-        }
+        #region variables
+            private IntPtr BUFFER_OFFSET_ZERO = GCHandle.Alloc(null, GCHandleType.Pinned).AddrOfPinnedObject(); //const value
+            //mouse variables
+            protected float angle = 0;
+            protected float lx = 0.0f, lz = -1.0f;
+            protected float x = 0.0f, y = 0.0f, z = +1.0f;
+            protected float fraction = 0.02f;   //this value is the amount of movement in the camera
+            //data structures
+            private SharpGL.SceneGraph.Vertex maxVertex = new SharpGL.SceneGraph.Vertex(float.MinValue, float.MinValue, float.MinValue);    //maximum value once loaded
+            private SharpGL.SceneGraph.Vertex minVertex = new SharpGL.SceneGraph.Vertex(float.MaxValue, float.MaxValue, float.MaxValue);
+            private List<SharpGL.SceneGraph.Vertex> l_vertex = null;    //store ALL vertexes added
+            private List<SharpGL.SceneGraph.Vertex> l_color = null;     //store ALL colors added
+            private List<int> l_sizes = null;   //store size of each buffer of points (a list of points)
+            private List<uint[]> l_vboId = new List<uint[]>();  //list of index in buffers
+            //public values
+            public SharpGL.SceneGraph.Vertex v_center;
+            public float f_scale;
+        #endregion
 
         private void openGLControl_KeyDown(object sender, KeyEventArgs e)
         {
@@ -282,6 +366,14 @@ namespace PointRendering
             else if (e.KeyCode == Keys.E)
             {
                 y -= fraction;
+            }
+            else if (e.KeyCode == Keys.O) 
+            {
+                openInputDataDialog();
+            }
+            else if (e.KeyCode == Keys.T) 
+            {
+                testFunctiontoAddCopy();
             }
             Invalidate();
         }

@@ -57,12 +57,8 @@
             this.Name = "SharpGLForm";
             this.Text = "SharpGL Form";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.SharpGLForm_FormClosing);
-            this.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.SharpGLForm_KeyPress);
-            this.MouseDown += new System.Windows.Forms.MouseEventHandler(this.SharpGLForm_MouseDown);
-            this.MouseMove += new System.Windows.Forms.MouseEventHandler(this.SharpGLForm_MouseMove);
             ((System.ComponentModel.ISupportInitialize)(this.openGLControl)).EndInit();
             this.ResumeLayout(false);
-
         }
 
         #endregion
