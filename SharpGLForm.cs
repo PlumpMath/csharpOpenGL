@@ -76,11 +76,12 @@ namespace PointRendering
             //  Load the identity matrix.
             gl.LoadIdentity();
             // using a camera to move into the scene
-            gl.LookAt(v_position.X, v_position.Y, v_position.Z, v_position.X + v_lookat.X, v_position.Y + v_lookat.Y, v_position.Z + v_lookat.Z, 0.0f, 1.0f, 0.0f);
-            // rotate the model from its original way
-            gl.Rotate(-90, 1, 0, 0);
+            //gl.LookAt(v_position.X, v_position.Y, v_position.Z, v_position.X + v_lookat.X, v_position.Y + v_lookat.Y, v_position.Z + v_lookat.Z, 0.0f, 1.0f, 0.0f);
+            gl.LookAt(cameraPos.X, cameraPos.Y, cameraPos.Z, (cameraPos + cameraFront).X, (cameraPos + cameraFront).Y, (cameraPos + cameraFront).Z, cameraUp.X, cameraUp.Y, cameraUp.Z);
+            
             //drawing the model
             gl.PushMatrix();
+                gl.Rotate(-90, 1, 0, 0);
                 drawModel(gl);
             gl.PopMatrix();
         }
@@ -143,12 +144,12 @@ namespace PointRendering
             SharpGL.SceneGraph.GLColor red = new SharpGL.SceneGraph.GLColor(0.9f, 0.05f, 0.05f, 1);
             //bottom color
             SharpGL.SceneGraph.GLColor green = new SharpGL.SceneGraph.GLColor(0.05f, 0.95f, 0.05f, 1);
-            float diff = maxVertex.Y - minVertex.Y;
+            float diff = maxVertex.Z - minVertex.Z;
 
             SharpGL.SceneGraph.Vertex colorTemp = new SharpGL.SceneGraph.Vertex();
             for (int k = 0; k < lcolor.Count; k++)
             {
-                float t = (l_vertex[k].Y - minVertex.Y) / diff;
+                float t = (l_vertex[k].Z - minVertex.Z) / diff;
                 //interpolated value
                 colorTemp.Set( (red.R * (1.0f - t)) + (green.R * t),
                                 (red.G * (1.0f - t)) + (green.G * t),
@@ -304,7 +305,8 @@ namespace PointRendering
 
             //  Create a perspective transformation.
             gl.Perspective(60.0f, (double)Width / (double)Height, 0.01, 100.0);
-
+            lastX = Width / 2.0f;
+            lastY = Height / 2.0f;
             //  Set the modelview matrix.
             gl.MatrixMode(OpenGL.GL_MODELVIEW);
         }
@@ -321,12 +323,12 @@ namespace PointRendering
                 foreach (var element in l_vboId)
                     gl.DeleteBuffers(2, element);
             }
-            l_vboId.Clear();
+            if(l_vboId != null) l_vboId.Clear();
             //delete sizes of list of points
-            l_sizes.Clear();
+            if(l_sizes != null) l_sizes.Clear();
             //clear list of vertex and color
-            l_color.Clear();
-            l_vertex.Clear();
+            if(l_color != null) l_color.Clear();
+            if(l_vertex != null) l_vertex.Clear();
             //reset to original values the camera
             //angle = 0.0f;
             //lx = 0.0f; lz = -1.0f;
@@ -346,11 +348,6 @@ namespace PointRendering
 
         #region variables
             private IntPtr BUFFER_OFFSET_ZERO = GCHandle.Alloc(null, GCHandleType.Pinned).AddrOfPinnedObject(); //const value
-            //mouse variables
-            protected float angleX = 0;
-            protected float angleY = 0;
-            protected SharpGL.SceneGraph.Vertex v_lookat = new SharpGL.SceneGraph.Vertex(0.01f, 0.01f, -1);
-            protected SharpGL.SceneGraph.Vertex v_position = new SharpGL.SceneGraph.Vertex(0,0,1);
             protected const float SPEED_MOVE = 0.015f;   //this value is the amount of movement in the camera, its fixed
             //data structures
             private SharpGL.SceneGraph.Vertex maxVertex = new SharpGL.SceneGraph.Vertex(float.MinValue, float.MinValue, float.MinValue);    //maximum value once loaded
@@ -363,87 +360,180 @@ namespace PointRendering
             public SharpGL.SceneGraph.Vertex v_center;
             public float f_scale;
             //mouse variables
-            Point posStart;     //first click
-            bool bisLeftDrag = false;
-            bool bisRightDrag = false;
+            private Point posStart;     //first click
+            private bool bisLeftDrag = false;
+            private bool bisRightDrag = false;
+            //camera variables
+            protected SharpGL.SceneGraph.Vertex cameraPos = new SharpGL.SceneGraph.Vertex(0,0,0);
+            protected SharpGL.SceneGraph.Vertex cameraUp = new SharpGL.SceneGraph.Vertex(0,1,0);
+            protected SharpGL.SceneGraph.Vertex cameraFront = new SharpGL.SceneGraph.Vertex(0, 0, -1);
+            protected float yaw = -90.0f;	// Yaw is initialized to -90.0 degrees since a yaw of 0.0 results in a direction vector pointing to the right
+            protected float pitch = 0.0f;
+            protected float lastX;
+            protected float lastY;
+            protected bool firstMouse = true; //to be set the 1st time on click
         #endregion
 
-        private void openGLControl_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.KeyCode == Keys.O) 
-            {
-                openInputDataDialog();
-            }
-            else if (e.KeyCode == Keys.T) 
-            {
-                testFunctiontoAddCopy();
-            }
-            Invalidate();
-        }
 
-        private void openGLControl_MouseDown(object sender, MouseEventArgs e)
-        {
-            if (e.Button == System.Windows.Forms.MouseButtons.Left)
+        #region mouseControls
+            /// <summary>
+            /// Simple cross product between vectors
+            /// <param name="a">first vector</param>
+            /// <param name="b">second vector</param>
+            /// <returns> a resulting vector of a x b</returns>
+            /// </summary>
+            SharpGL.SceneGraph.Vertex cross(SharpGL.SceneGraph.Vertex a, SharpGL.SceneGraph.Vertex b) 
             {
-                bisLeftDrag = true;
-                posStart = new Point(e.X, e.Y);
+                return new SharpGL.SceneGraph.Vertex(a.Y*b.Y - a.Z*b.Y,a.Z*b.X - a.X*b.Z, a.X*b.Y - a.Y*b.X);
             }
-            else if (e.Button == System.Windows.Forms.MouseButtons.Right) 
-            {
-                bisRightDrag = true;
-                posStart = new Point(e.X, e.Y);
-            }
-        }
 
-        private void openGLControl_MouseWheel(object sender, MouseEventArgs e)
-        {
-            if (e.Delta > 0)
+            /// <summary>
+            /// Function to calculate the radian value given a degree
+            /// </summary>
+            /// <param name="angle"> in degree (0,360)</param>
+            /// <returns> a radian value (0, 2PI)</returns>
+            private float DegreeToRadian(double angle)
             {
-                v_position.Z += v_lookat.Z * SPEED_MOVE;
+                return (float)(angle * (Math.PI / 180.0));
             }
-            else 
-            {
-                v_position.Z -= v_lookat.Z * SPEED_MOVE;
-            }
-        }
 
-        private void openGLControl_MouseMove(object sender, MouseEventArgs e)
-        {
-            if (bisLeftDrag) 
+            /// <summary>
+            /// When a key is pressed
+            /// </summary>
+            /// <param name="sender"></param>
+            /// <param name="e"></param>
+            private void openGLControl_KeyDown(object sender, KeyEventArgs e)
             {
-                Point aux = new Point(e.X, e.Y);
-                int difX = aux.X - posStart.X;
-                int difY = aux.Y - posStart.Y;
-                posStart.X = aux.X;
-                posStart.Y = aux.Y;
+                if (e.KeyCode == Keys.O) 
+                {
+                    openInputDataDialog();  //open the dialog
+                }
+                else if (e.KeyCode == Keys.T) 
+                {
+                    testFunctiontoAddCopy();    //function to test. ITS A DEBUGGING FUNCTION, can be delete it
+                }
+                Invalidate();   //to invoke the draw function
+            }
+            
+            /// <summary>
+            /// When a mouse click is pressed (right or left)
+            /// </summary>
+            /// <param name="sender"></param>
+            /// <param name="e"></param>
+            private void openGLControl_MouseDown(object sender, MouseEventArgs e)
+            {
+                if (e.Button == System.Windows.Forms.MouseButtons.Left)
+                {
+                    bisLeftDrag = true;
+                    posStart = new Point(e.X, e.Y);
+                }
+                else if (e.Button == System.Windows.Forms.MouseButtons.Right) 
+                {
+                    bisRightDrag = true;
+                    posStart = new Point(e.X, e.Y);
+                }
+            }
+            
+            /// <summary>
+            /// When the mouse wheel is touched/invoked
+            /// </summary>
+            /// <param name="sender"></param>
+            /// <param name="e"></param>
+            private void openGLControl_MouseWheel(object sender, MouseEventArgs e)
+            {
+                if (e.Delta > 0)    //mouse wheel is from back to front
+                    cameraPos += cameraFront * SPEED_MOVE;
+                else 
+                    cameraPos -= cameraFront * SPEED_MOVE;
+            }
 
-                angleX += (0.005f * difX);
-                angleY += (0.005f * difY);
-
-                v_lookat.X = (float)Math.Sin(angleX);
-                v_lookat.Z = (float)-Math.Cos(angleX);
-            }
-            else if (bisRightDrag) 
+            /// <summary>
+            /// When the mouse is moving over the screen
+            /// </summary>
+            /// <param name="sender"></param>
+            /// <param name="e"></param>
+            private void openGLControl_MouseMove(object sender, MouseEventArgs e)
             {
-                int difX = e.X - posStart.X;
-                int difY = e.Y - posStart.Y;
-                posStart.X = e.X;
-                posStart.Y = e.Y;
-                v_position.X += v_lookat.X * SPEED_MOVE * -difX/2;
-                v_position.Y += v_lookat.Y * SPEED_MOVE * difY/2;
+                if (bisLeftDrag)    //left button clicked
+                {
+                    if (firstMouse)
+                    {
+                        lastX = e.X;
+                        lastY = e.Y;
+                        firstMouse = false;
+                    }
+                    float xoffset = e.X - lastX;
+                    float yoffset = lastY - e.Y; // Reversed since y-coordinates go from bottom to left
+                    lastX = e.X;
+                    lastY = e.Y;
+                    xoffset *= SPEED_MOVE;  //sensivity
+                    yoffset *= SPEED_MOVE;  //sensivity
+                    yaw += xoffset;
+                    pitch += yoffset;
+                    // Make sure that when pitch is out of bounds, screen doesn't get flipped
+                    if (pitch > 89.0f)
+                        pitch = 89.0f;
+                    if (pitch < -89.0f)
+                        pitch = -89.0f;
+                    SharpGL.SceneGraph.Vertex front = new SharpGL.SceneGraph.Vertex();
+                    front.X = (float)(Math.Cos(DegreeToRadian(yaw)) * Math.Cos(DegreeToRadian(pitch)));
+                    front.Y = (float)Math.Sin(DegreeToRadian(pitch));
+                    front.Z = (float)(Math.Sin(DegreeToRadian(yaw)) * Math.Cos(DegreeToRadian(pitch)));
+                    front.Normalize();
+                    cameraFront = front;
+                }
+                else if (bisRightDrag) //right button
+                {
+                    if (firstMouse)
+                    {
+                        lastX = e.X;
+                        lastY = e.Y;
+                        firstMouse = false;
+                    }
+                    float xoffset = e.X - lastX;
+                    float yoffset = lastY - e.Y; // Reversed since y-coordinates go from bottom to left
+                    lastX = e.X;
+                    lastY = e.Y;
+                    if (xoffset > 0)    //to the right
+                    {
+                        SharpGL.SceneGraph.Vertex v = cross(cameraFront, cameraUp);
+                        v.Normalize();
+                        cameraPos += v * SPEED_MOVE;
+                    }
+                    else if (xoffset < 0)   //to the left
+                    {
+                        SharpGL.SceneGraph.Vertex v = cross(cameraFront, cameraUp);
+                        v.Normalize();
+                        cameraPos -= v * SPEED_MOVE;
+                    }
+                    if (yoffset > 0)    //to go up
+                    {
+                        cameraPos.Y += SPEED_MOVE / 6.0f; //to adjust the sensivity
+                    }
+                    else if (yoffset < 0)   //to go down
+                    {
+                        cameraPos.Y -= SPEED_MOVE / 6.0f; //to adjust the sensivity
+                    }
+                }
             }
-        }
-
-        private void openGLControl_MouseUp(object sender, MouseEventArgs e)
-        {
-            if (e.Button == System.Windows.Forms.MouseButtons.Left)
+            
+            /// <summary>
+            /// When the mouse is released from the click
+            /// </summary>
+            /// <param name="sender"></param>
+            /// <param name="e"></param>
+            private void openGLControl_MouseUp(object sender, MouseEventArgs e)
             {
-                bisLeftDrag = false;
+                if (e.Button == System.Windows.Forms.MouseButtons.Left)
+                {
+                    bisLeftDrag = false;
+                }
+                else if (e.Button == System.Windows.Forms.MouseButtons.Right)
+                {
+                    bisRightDrag = false;
+                }
+                firstMouse = true;
             }
-            else if (e.Button == System.Windows.Forms.MouseButtons.Right)
-            {
-                bisRightDrag = false;
-            }
-        }
+         #endregion
     }
 }
